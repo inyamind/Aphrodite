@@ -33,7 +33,8 @@ class Database {
                 USERNAME TEXT NOT NULL UNIQUE,
                 PASSWORD TEXT NOT NULL,
                 DISCORD_USER_ID TEXT NOT NULL UNIQUE,
-                HWID TEXT NULL UNIQUE
+                HWID TEXT NULL UNIQUE,
+                LAST_RESET DATETIME
             );
     `;
 
@@ -187,6 +188,79 @@ class Database {
         });
     }
 
+    
+    async resetHWID(discordUserId) {
+        return new Promise((resolve, reject) => {
+            this.getUserByID(discordUserId)
+                .then(user => this.validateReset(user))
+                .then(user => this.performReset(user, discordUserId))
+                .then(user => this.updateLastReset(user, discordUserId))
+                .then(user => {
+                    console.log(`HWID reset for user: ${user.USERNAME}`);
+                    resolve({ status: 'success', message: 'HWID reset successfully' });
+                })
+                .catch(err => {
+                    console.error(`Failed to reset HWID: ${err.message}`);
+                    reject(err);
+                });
+        });
+    }
+    
+    validateReset(user) {
+        const currentDate = new Date();
+        const oneMonthInMilliseconds = 30 * 24 * 60 * 60 * 1000;
+        let timeDifference;
+    
+        if (user.LAST_RESET !== null) {
+            const lastResetDate = new Date(user.LAST_RESET);
+            timeDifference = currentDate - lastResetDate;
+        } else {
+            // If LAST_RESET is NULL, we can consider it as more than a month ago
+            timeDifference = oneMonthInMilliseconds + 1;
+        }
+    
+        if (timeDifference < oneMonthInMilliseconds) {
+            throw new Error('You can only reset your HWID once a month.');
+        } else if (user.HWID === null) {
+            throw new Error('Your HWID is already reset.');
+        }
+    
+        return user;
+    }
+    
+    performReset(user, discordUserId) {
+        const sql = `UPDATE users SET HWID = NULL WHERE DISCORD_USER_ID = ?;`;
+        const params = [discordUserId];
+    
+        return new Promise((resolve, reject) => {
+            this.db.run(sql, params, error => {
+                if (error) {
+                    console.error(error.message);
+                    reject(error);
+                } else {
+                    resolve(user);
+                }
+            });
+        });
+    }
+    
+    updateLastReset(user, discordUserId) {
+        const sql = `UPDATE users SET LAST_RESET = CURRENT_TIMESTAMP WHERE DISCORD_USER_ID = ?;`;
+        const params = [discordUserId];
+    
+        return new Promise((resolve, reject) => {
+            this.db.run(sql, params, error => {
+                if (error) {
+                    console.error(error.message);
+                    reject(error);
+                } else {
+                    resolve(user);
+                }
+            });
+        });
+    }
+    
+    
     updateHwid(username, hwid) {
         return new Promise((resolve, reject) => {
             const sql = `UPDATE users SET HWID = ? WHERE USERNAME = ?;`;

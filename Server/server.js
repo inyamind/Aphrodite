@@ -76,31 +76,53 @@ client.on('message', async message => {
     if (message.channel.type !== 'dm') 
         return;
 
-     if (message.content !== '!register') 
-        return;
-
+     if (message.content === '!register') 
+     {
         const messageAuthorId = message.author.id;
-    if (await myDatabase.userExists(messageAuthorId) === false) {
-        const messageAuthorName = message.author.username;
-        console.log(`Message from ${messageAuthorId}: ${message.content}`);
-        let username = messageAuthorName;      
-        
-        // check if the username already exists in the database
-        if (await myDatabase.usernameTaken(username) === true) {
-            // if it does, add a random number to the end of the username
-            username = `${username}${utils.generateRandomNumber()}`;
+        if (await myDatabase.userExists(messageAuthorId) === false) {
+            const messageAuthorName = message.author.username;
+            console.log(`Message from ${messageAuthorId}: ${message.content}`);
+            let username = messageAuthorName;      
+            
+            // check if the username already exists in the database
+            if (await myDatabase.usernameTaken(username) === true) {
+                // if it does, add a random number to the end of the username
+                username = `${username}${utils.generateRandomNumber()}`;
+            }
+    
+            const password = utils.generateRandomPassword();
+            myDatabase.insertUser(username, password, messageAuthorId);
+    
+            myDiscordBot.SendDiscordMessage(messageAuthorId, `Thanks ${username} for registering!`, 'good');
+            myDiscordBot.SendDiscordMessage(messageAuthorId, `Username: ${username}\nPassword: ${password}`, 'good');
+        }
+        else {
+            myDiscordBot.SendDiscordMessage(messageAuthorId, `UserID already registered.`, 'bad');
+        }
+     }
+     else if (message.content === '!reset_hwid') 
+     {
+        // check if the user exists in the database
+        const messageAuthorId = message.author.id;
+        if (await myDatabase.userExists(messageAuthorId) !== true)
+        {
+            myDiscordBot.SendDiscordMessage(messageAuthorId, `UserID not registered.`, 'bad');
+            return;
         }
 
-        const password = utils.generateRandomPassword();
-        myDatabase.insertUser(username, password, messageAuthorId);
-
-        myDiscordBot.SendDiscordMessage(messageAuthorId, `Thanks ${username} for registering!`, 'good');
-        myDiscordBot.SendDiscordMessage(messageAuthorId, `Username: ${username}\nPassword: ${password}`, 'good');
-    }
-    else {
-        myDiscordBot.SendDiscordMessage(messageAuthorId, `UserID already registered.`, 'bad');
-    }
+        try {
+            let result = await myDatabase.resetHWID(messageAuthorId);
+            if (result.status === 'success') {
+                myDiscordBot.SendDiscordMessage(messageAuthorId, `HWID reset.`, 'good');
+            }
+        }catch (error) {
+                console.error(`Failed to reset HWID: ${error}`);        
+                myDiscordBot.SendDiscordMessage(messageAuthorId, error, 'bad');
+        }
+        
+     }
 });
+
 
 client.login(process.env.DISCORD_BOT_TOKEN);
 app.listen(8000, () => console.log('Server is listening on port 8000'));
